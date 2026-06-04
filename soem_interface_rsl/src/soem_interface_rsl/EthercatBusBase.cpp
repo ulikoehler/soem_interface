@@ -119,7 +119,8 @@ struct EthercatBusBaseTemplateAdapter::EthercatSlaveBaseImpl {
           ecx_close(&ecatContext_);
           return false;  // avoid that executation continues.
         }
-        if (ecx_detect_slaves(&ecatContext_) == static_cast<int>(slaves_.size())) {
+        int detectedSlaves = ecx_detect_slaves(&ecatContext_);
+        if (detectedSlaves == static_cast<int>(slaves_.size())) {
           // on some of the older (rsl) anydrives there seems to be a short race between bus is responsive and slave is fully ready...
           // so give them this 1 sec to be fully ready to be started...
           soem_interface_rsl::threadSleep(1.0);
@@ -127,13 +128,22 @@ struct EthercatBusBaseTemplateAdapter::EthercatSlaveBaseImpl {
         }
         if (retry == maxDiscoverRetries) {
           MELO_ERROR_STREAM("[soem_interface_rsl::" << name_ << "] "
-                                                    << "No slaves have been found.");
+                                                    << "No slaves have been found. Expected: " << slaves_.size()
+                                                    << ", Detected: " << detectedSlaves);
+          if (ecatContext_.elist->head > 0) {
+            MELO_ERROR_STREAM("[soem_interface_rsl::" << name_ << "] SOEM error list:");
+            for (int i = 0; i < ecatContext_.elist->head; i++) {
+              MELO_ERROR_STREAM("[soem_interface_rsl::" << name_ << "] Error " << i << ": "
+                                                        << ecx_err2string(ecatContext_.elist->Error[i]));
+            }
+          }
           ecx_close(&ecatContext_);
           return false;
         }
         // Sleep and retry.
         soem_interface_rsl::threadSleep(ecatConfigRetrySleep_);
-        MELO_INFO_STREAM("[soem_interface_rsl::" << name_ << "] No slaves have been found, retrying " << retry + 1 << "/"
+        MELO_INFO_STREAM("[soem_interface_rsl::" << name_ << "] No slaves have been found. Expected: " << slaves_.size()
+                                                 << ", Detected: " << detectedSlaves << ", retrying " << retry + 1 << "/"
                                                  << maxDiscoverRetries << " ...");
       }
 
